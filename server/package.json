@@ -1,0 +1,11 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "Expo server with CocoSsd and Express.js",
+  "main": "server.js",
+  "dependencies": {
+    "express": "^4.17.1",
+    "@tensorflow/tfjs-node": "^4.1.0",
+    "@tensorflow-models/coco-ssd": "^2.0.3"
+  }
+}
