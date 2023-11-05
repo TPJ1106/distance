@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
-import { Gyroscope, Magnetometer, Accelerometer } from 'expo-sensors';
-import axios from 'axios';
+const { useEffect, useState } = require('react');
+const axios = require('axios');
+const { Text, View } = require('react-native');
+const { Gyroscope, Magnetometer, Accelerometer } = require('expo-sensors');
 
 export default function App() {
   const [gyroscopeData, setGyroscopeData] = useState(null);
@@ -93,3 +93,4 @@ export default function App() {
     return pitch;
   }
 }
+module.exports = App; // 모듈 내보내기

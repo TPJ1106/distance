@@ -283,6 +283,7 @@ const uploadImageToServer = async () => {
     }
   }
 };
+/*
 // 센서데이터
 useEffect(() => {
   const intervalId = setInterval(() => {
@@ -304,7 +305,7 @@ useEffect(() => {
     clearInterval(intervalId); // 컴포넌트가 언마운트될 때 인터벌을 정리합니다.
   };
 }, []);
-
+*/
   return (
     <View style={styles.container}>
       <StatusBar hidden={true} />
@@ -328,9 +329,8 @@ useEffect(() => {
                 <Text style={styles.overlayText}>{speechText}</Text>
               </View>
             )}
-            {/*거리 정보 표시*/}
             <View style={{position: "absolute", bottom:10, left:10}}>
-                <Text style={{color:"white"}}>{distanceResult}</Text>
+            <Text style={{color:"white"}}>{distanceResult}</Text>
             </View>
 
             {/* 서버 응답 팝업 */}
