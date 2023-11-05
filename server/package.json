@@ -6,6 +6,7 @@
   "dependencies": {
     "express": "^4.17.1",
     "@tensorflow/tfjs-node": "^4.1.0",
-    "@tensorflow-models/coco-ssd": "^2.0.3"
+    "@tensorflow-models/coco-ssd": "^2.0.3",
+    "@opencv": "^4.5.3"
   }
 }

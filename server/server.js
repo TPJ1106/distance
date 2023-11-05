@@ -6,10 +6,14 @@ const multer = require('multer');
 const { hostname } = require('os');
 const app = express();
 const port = process.env.PORT || 3000;
-const fetch = require('node-fetch');
 const { PythonShell } = require('python-shell');
 app.use(express.json());
-const distancesensor = require('./distancesensor'); // distancesensor.js
+const distancesensor = require('../distancesensor.py');
+const bodyParser = require('body-parser');
+const sensor = require('../sensor');  // sensor.js 파일 불러오기
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
 // CORS 설정
 app.use((req, res, next) => {
@@ -62,62 +66,64 @@ app.post('/captureAndProcess', upload.single('image'), async (req, res) => {
 
   try {
     isCapturing = true;
-     // 십자선 위치 받아오기
-     const crosshairPosition = req.body.crosshairPosition;
 
-     // 유효성 검사
-     if (crosshairPosition == null || typeof crosshairPosition !== 'object' ||
-     crosshairPosition.x == null || typeof crosshairPosition.x !== 'number' ||
-     crosshairPosition.y == null || typeof crosshairPosition.y !== 'number') {
-     return res.status(400).json({ message: 'Invalid data provided.' });
-   }
+    const crosshairPosition = req.body.crosshairPosition;
+    const x = req.body.x;
+    const y = req.body.y;
 
-    // 타임스탬프를 사용하여 이미지 파일 이름 생성
-    const timestamp = Date.now();
-    const fileName = `./Tests2/input2/${timestamp}.jpg`;
-    
-    // Calculate the focal length.
-    const focalLength = calculateFocalLength(pixelHeight, distanceToObject, realHeight);
- 
-    // 이미지 데이터를 파일로 저장
-    fs.writeFileSync(fileName, req.file.buffer);
-
-    const objects = distancesensor.detectObjects(image, lowerColor, upperColor);
-
-    for (let obj of objects) {
-      const pixelSize = obj.width; // 객체의 너비를 픽셀 단위로 측정
-      const pixelHeight = obj.height; // 객체의 높이를 픽셀 단위로 측정
-      const distanceValue = distancesensor.calculateDistance(pixelSize, realSize, focalLength);
-      const height = distancesensor.calculateHeight(pixelHeight, distanceValue, focalLength);
-      console.log("거리:", distanceValue, "m", "높이:", height, "m");
+    if (crosshairPosition == null || typeof crosshairPosition !== 'object' ||
+    crosshairPosition.x == null || typeof crosshairPosition.x !== 'number' ||
+    crosshairPosition.y == null || typeof crosshairPosition.y !== 'number') {
+      return res.status(400).json({ message: 'Invalid data provided.' });
     }
 
-    
-    // distance.py 실행 및 .txt 파일 생성
-    const distanceCommand = `python ../ai/distance.py ${fileName}`;
-    exec(distanceCommand, async (error, stdout, stderr) => {
-      if (error) {
-        console.error('distance.py 실행 오류:', error);
+    const timestamp = Date.now();
+    const fileName = `./Tests2/input2/${timestamp}.jpg`;
+
+    fs.writeFileSync(fileName, req.file.buffer);
+
+    let options = {
+      mode: 'text',
+      pythonOptions: ['-u'],
+      args: [fileName]
+    };
+
+    PythonShell.run('distancesensor.py', options, function(err, result) {
+      if (err) {
+        console.error('distancesensor.py 실행 오류:', err);
         isCapturing = false;
-        return res.status(500).json({ message: '거리 인식 중 오류 발생' });
+        return res.status(500).json({ message: '거리 및 높이 측정 중 오류 발생' });
       }
-      // 파이썬 스크립트 결과에서 깊이값 추출
-      const depth = parseFloat(stdout);
-      console.log('깊이:', depth)
 
-      // 센서에서 얻은 거리 정보를 가져옵니다.
-      const sensorDistance = distancesensor.getDistance();
+      const distanceAndHeight = JSON.parse(result[result.length - 1]);
+      console.log('거리:', distanceAndHeight.distance, '높이:', distanceAndHeight.height);
 
-      // 이미지 분석 결과와 센서 결과를 비교하여 오차를 계산합니다.
-      const error = depth - sensorDistance;
+      const sensorDistance = sensor.calculateDistance(distanceAndHeight.distance);
+      console.log('센서 거리:', sensorDistance);
 
-      // 오차를 보정하여 깊이 정보를 업데이트합니다.
-      const correctedDepth = depth - error;
+      let distanceOptions = {
+        mode: 'text',
+        pythonOptions: ['-u'],
+        args: [fileName, x, y, sensorDistance]
+      };
 
-      isCapturing = false;
-      
-      // 여기에서 클라이언트로 결과 전송
-      res.json({ depth: correctedDepth })
+      PythonShell.run('distance.py', distanceOptions, function(err, result) {
+        if (err) {
+          console.error('distance.py 실행 오류:', err);
+          isCapturing = false;
+          return res.status(500).json({ message: '깊이 추정 중 오류 발생' });
+        }
+
+        const depth = parseFloat(result[result.length - 1]);
+        console.log('깊이:', depth);
+
+        const correctedDepth = depth - (distanceAndHeight.distance - sensorDistance);
+        console.log('보정된 깊이:', correctedDepth);
+
+        isCapturing = false;
+
+        res.json({ depth: correctedDepth });
+      });
     });
   } catch (error) {
     console.error('캡처 및 처리 오류:', error);
@@ -178,14 +184,8 @@ app.post('/saveCameraImage', upload.single('image'), async (req, res) => {
 
 app.get('/', (req, res) => {
   try {
-    // 비즈니스 로직 수행
-
-    // 클라이언트에 응답
     res.json({ message: '데이터를 성공적으로 가져옴' });
   } catch (error) {
-    // 에러 핸들링
-
-    // 에러 응답
     res.status(500).json({ error: '서버 오류' });
   }
 });
