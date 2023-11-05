@@ -1,5 +1,5 @@
 const express = require('express');
-const cors = require('cors'); // cors 패키지 불러오기
+const cors = require('cors');
 const { exec } = require('child_process');
 const fs = require('fs');
 const multer = require('multer');
@@ -7,11 +7,11 @@ const { hostname } = require('os');
 const app = express();
 const port = process.env.PORT || 3000;
 const { PythonShell } = require('python-shell');
-app.use(express.json());
-const distancesensor = require('../distancesensor.py');
 const bodyParser = require('body-parser');
 const sensor = require('../sensor');  // sensor.js 파일 불러오기
+const { spawn } = require('child_process');
 
+app.use(express.json());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -34,6 +34,31 @@ function calculateFocalLength(pixelHeight, distanceToObject, realHeight) {
   return (pixelHeight * distanceToObject) / realHeight;
 }
 
+// Route for receiving sensor data
+app.post('/sensorData', upload.array(), (req, res) => {
+  const gyroscopeData = JSON.parse(req.body.gyroscope);
+  const magnetometerData = JSON.parse(req.body.magnetometer);
+  const accelerometerData = JSON.parse(req.body.accelerometer);
+  // Do something with sensor data...
+  res.sendStatus(200);
+});
+
+// Route for receiving distance data
+app.post('/distance', (req, res) => {
+  const distanceData = req.body.distance;
+  // Do something with distance data...
+  res.sendStatus(200);
+});
+
+// Route for calculating and processing distance
+app.get('/captureAndProcess', (req, res) => {
+  const distancePy = spawn('python', ['distancesensor.py']);
+  distancePy.stdout.on('data', (data) => {
+    const distanceData = JSON.parse(data.toString());
+    res.send(distanceData);
+  });
+});
+
 // Python 스크립트를 실행하는 함수
 function runScript(inputImage, x, y) {
   return new Promise((resolve, reject) => {
@@ -50,13 +75,6 @@ function runScript(inputImage, x, y) {
     });
   });
 }
-// 객체의 색상 범위 설정 (HSV 값)
-const lowerColor = new cv.Vec3(0, 100, 100);
-const upperColor = new cv.Vec3(10, 255, 255);
-
-// 검출하려는 객체의 실제 크기 설정 (미터 단위)
-const realSize = 0.1;
-
 
 // 이미지 촬영 및 처리 엔드포인트
 app.post('/captureAndProcess', upload.single('image'), async (req, res) => {
