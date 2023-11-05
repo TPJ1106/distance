@@ -1,5 +1,5 @@
 const express = require('express');
-const cors = require('cors');
+const cors = require('cors');                                       // 중간 읽히지 않은 값
 const { exec } = require('child_process');
 const fs = require('fs');
 const multer = require('multer');
@@ -9,7 +9,7 @@ const port = process.env.PORT || 3000;
 const { PythonShell } = require('python-shell');
 const bodyParser = require('body-parser');
 const sensor = require('../sensor');  // sensor.js 파일 불러오기
-const { spawn } = require('child_process');
+const { spawn } = require('child_process');                 // 중간 읽히지 않은 값
 const nodesensor = require('../nodesensor'); // nodesensor.js 파일 불러오기
 
 app.use(express.json());
@@ -24,6 +24,7 @@ app.use((req, res, next) => {
   next();
 });
 
+
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
@@ -31,35 +32,40 @@ let isCapturing = false;
 
 global.fetch = require('cross-fetch');
 // unction to calculate focal length 거리측정
-function calculateFocalLength(pixelHeight, distanceToObject, realHeight) {
+function calculateFocalLength(pixelHeight, distanceToObject, realHeight) {    // 중간 읽히지 않은 값
   return (pixelHeight * distanceToObject) / realHeight;
 }
 
-// /sensorData 엔드포인트
-app.post('/sensorData', (req, res) => {
+// /sensorData 엔드포인트   distancesensor.py에서 값 받아오기
+app.post('/sensorData', async (req, res) => {
   const gyroscopeData = req.body.gyroscope;
   const magnetometerData = req.body.magnetometer;
   const accelerometerData = req.body.accelerometer;
+  const distanceData = req.body.distance; // 거리 데이터 추가
 
-  nodesensor.measureAndSendDistance(gyroscopeData, magnetometerData, accelerometerData, (distanceData) => {
-    res.sendStatus(200);
-  });
+  // 거리 데이터 처리
+  await nodesensor.measureAndSendDistance(gyroscopeData, magnetometerData, accelerometerData, distanceData);
+  res.sendStatus(200);
 });
 
-// /distance 엔드포인트
+// /distance 엔드포인트   distance.py에서 값 받아오기
 app.post('/distance', (req, res) => {
-  const distanceData = req.body.distance;
-  // 거리 데이터 처리
+  const depth = req.body.depth; // depth 파라미터 받기
+
+  // 깊이 데이터 처리 (센서 측정 오차 보정)
+  const correctedDistance = nodesensor.correctDistance(depth); // depth를 인자로 전달
+  console.log('보정된 거리:', correctedDistance); // 보정된 거리 출력
+
   res.sendStatus(200);
 });
 
 // Python 스크립트를 실행하는 함수
-function runScript(inputImage, x, y) {
+function runScript(inputImage, x, y, sensorDistance) {  // sensorDistance 인자 추가
   return new Promise((resolve, reject) => {
     let options = {
       mode: 'text',
       pythonOptions: ['-u'], // unbuffered, 실시간 출력을 허용
-      args: [inputImage, x, y]  // 파이썬 스크립트에 전달할 인수
+      args: [inputImage, x, y, sensorDistance]  // 파이썬 스크립트에 sensorDistance 인자 전달
     };
 
     PythonShell.run('distance.py', options, function (err, result) {
@@ -84,8 +90,8 @@ app.post('/captureAndProcess', upload.single('image'), async (req, res) => {
     const y = req.body.y;
 
     if (crosshairPosition == null || typeof crosshairPosition !== 'object' ||
-    crosshairPosition.x == null || typeof crosshairPosition.x !== 'number' ||
-    crosshairPosition.y == null || typeof crosshairPosition.y !== 'number') {
+      crosshairPosition.x == null || typeof crosshairPosition.x !== 'number' ||
+      crosshairPosition.y == null || typeof crosshairPosition.y !== 'number') {
       return res.status(400).json({ message: 'Invalid data provided.' });
     }
 
@@ -113,20 +119,26 @@ app.post('/captureAndProcess', upload.single('image'), async (req, res) => {
       const sensorDistance = sensor.calculateDistance(distanceAndHeight.distance);
       console.log('센서 거리:', sensorDistance);
 
+      
+
       let distanceOptions = {
         mode: 'text',
         pythonOptions: ['-u'],
         args: [fileName, x, y, sensorDistance]
       };
 
-      PythonShell.run('distance.py', distanceOptions, function(err, result) {
+      PythonShell.run('distance.py', distanceOptions, async function(err, result) {
         if (err) {
           console.error('distance.py 실행 오류:', err);
           isCapturing = false;
           return res.status(500).json({ message: '깊이 추정 중 오류 발생' });
         }
 
-        const depth = parseFloat(result[result.length - 1]);
+        const sensorDistance = sensor.calculateDistance(distanceAndHeight.distance);
+        console.log('센서 거리:', sensorDistance);
+
+        // runScript 함수 호출
+        const depth = await runScript(fileName, x, y, sensorDistance);
         console.log('깊이:', depth);
 
         const correctedDepth = depth - (distanceAndHeight.distance - sensorDistance);
@@ -194,7 +206,7 @@ app.post('/saveCameraImage', upload.single('image'), async (req, res) => {
   }
 });
 
-app.get('/', (req, res) => {
+app.get('/', (req, res) => {                // 중간 읽히지 않은 값
   try {
     res.json({ message: '데이터를 성공적으로 가져옴' });
   } catch (error) {
