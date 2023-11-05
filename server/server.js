@@ -10,6 +10,7 @@ const { PythonShell } = require('python-shell');
 const bodyParser = require('body-parser');
 const sensor = require('../sensor');  // sensor.js 파일 불러오기
 const { spawn } = require('child_process');
+const nodesensor = require('../nodesensor'); // nodesensor.js 파일 불러오기
 
 app.use(express.json());
 app.use(bodyParser.json());
@@ -34,29 +35,22 @@ function calculateFocalLength(pixelHeight, distanceToObject, realHeight) {
   return (pixelHeight * distanceToObject) / realHeight;
 }
 
-// Route for receiving sensor data
-app.post('/sensorData', upload.array(), (req, res) => {
-  const gyroscopeData = JSON.parse(req.body.gyroscope);
-  const magnetometerData = JSON.parse(req.body.magnetometer);
-  const accelerometerData = JSON.parse(req.body.accelerometer);
-  // Do something with sensor data...
-  res.sendStatus(200);
+// /sensorData 엔드포인트
+app.post('/sensorData', (req, res) => {
+  const gyroscopeData = req.body.gyroscope;
+  const magnetometerData = req.body.magnetometer;
+  const accelerometerData = req.body.accelerometer;
+
+  nodesensor.measureAndSendDistance(gyroscopeData, magnetometerData, accelerometerData, (distanceData) => {
+    res.sendStatus(200);
+  });
 });
 
-// Route for receiving distance data
+// /distance 엔드포인트
 app.post('/distance', (req, res) => {
   const distanceData = req.body.distance;
-  // Do something with distance data...
+  // 거리 데이터 처리
   res.sendStatus(200);
-});
-
-// Route for calculating and processing distance
-app.get('/captureAndProcess', (req, res) => {
-  const distancePy = spawn('python', ['distancesensor.py']);
-  distancePy.stdout.on('data', (data) => {
-    const distanceData = JSON.parse(data.toString());
-    res.send(distanceData);
-  });
 });
 
 // Python 스크립트를 실행하는 함수
